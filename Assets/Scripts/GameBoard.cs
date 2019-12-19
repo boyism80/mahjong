@@ -6,17 +6,56 @@ using System.Collections;
 
 public class GameBoard : MonoBehaviour {
 
+    /// <summary>
+    /// 현재 생성된 마작 카드 테이블
+    /// </summary>
     private MoneySuitedCard[,] _moneySuitedCardTable;
+
+    /// <summary>
+    /// 행렬 수
+    /// </summary>
     private int _row, _column;
+
+    /// <summary>
+    /// 블록 테이블
+    /// </summary>
     private BlockTable _blockTable;
+
+    /// <summary>
+    /// 현재 선택된 카드
+    /// </summary>
     private MoneySuitedCard _selected;
 
+    /// <summary>
+    /// 카드 스프라이트 리스트
+    /// </summary>
     public Sprite[] Sprites;
+
+    /// <summary>
+    /// 카드 크기
+    /// </summary>
     public Vector2 MoneySuitedCardSize;
+
+    /// <summary>
+    /// 카드 프리팹
+    /// </summary>
     public MoneySuitedCard MoneySuitedCard;
+
+    /// <summary>
+    /// 초기 행렬 수
+    /// </summary>
     public int InitRows = 6, InitColumn = 4;
+
+    /// <summary>
+    /// 라인 프리팹 (경로 효과)
+    /// </summary>
     public DrawLine DrawLine;
 
+
+    /// <summary>
+    /// 세로는 반드시 짝수로 한다.
+    /// 가로를 짝수로 해도 상관없다. 반드시 행x열은 짝수 형태를 띄어야 한다. (홀수면 짝이 안맞으니까;;)
+    /// </summary>
     public int Rows
     {
         get
@@ -42,6 +81,9 @@ public class GameBoard : MonoBehaviour {
         }
     }
 
+    /// <summary>
+    /// 현재 선택된 카드
+    /// </summary>
     public MoneySuitedCard Selected
     {
         get
@@ -63,6 +105,9 @@ public class GameBoard : MonoBehaviour {
         }
     }
 
+    /// <summary>
+    /// 현재 존재하는 카드의 리스트
+    /// </summary>
     public MoneySuitedCard[] Exists
     {
         get
@@ -81,6 +126,9 @@ public class GameBoard : MonoBehaviour {
         }
     }
 
+    /// <summary>
+    /// 현재 상태에서 더 이상 진행이 가능한지의 여부를 확인한다.
+    /// </summary>
     private bool IsContinuable
     {
         get
@@ -127,49 +175,42 @@ public class GameBoard : MonoBehaviour {
         if(Input.GetButtonDown("Fire1") == false)
             return;
 
-        var dest = this.Select();
-        if(dest == null)
+        var selectedNow = this.Select();
+        if(selectedNow == null)
         {
 
         }
-        else if(this.Selected == null)
+        else if(this.Selected == null)      // 선택된 카드가 없을 때
         {
-            this.Selected = dest;
+            this.Selected = selectedNow;
         }
-        else
+        else // 이전에 선택된 카드가 있었을 때
         {
-            var route = this.Remove(this.Selected, dest);
-            if(route == null)
+            // 두 카드가 매칭될 수 있는지 검사한다.
+            var route = this.Remove(this.Selected, selectedNow);
+            if(route == null) // 매칭될 수 없을 때, 이전에 선택된 카드를 무효화하고 새로 갱신
             {
-                this.Selected = dest;
+                this.Selected = selectedNow;
             }
-            else if(this.IsClear)
+            else if(this.IsClear) // 현재 스테이지 클리어인 경우 난이도를 높이고 게임 다시 시작
             {
                 this.Rows++;
                 this.Columns++;
                 this.Setup();
             }
-            else if(this.IsContinuable == false)
+            else if(this.IsContinuable == false) // 더 이상 진행할 수 없을 때 셔플
             {
                 this.Shuffle();
             }
-            else
+            else if(this.DrawLine != null) // 경로를 표시한다.
             {
-                if(this.DrawLine != null)
-                {
-                    var line = Instantiate<DrawLine>(this.DrawLine);
-                    line.OnComplete.AddListener(this.OnDrawLineComplete);
-                    var points = new List<Vector3>();
-                    foreach(var r in route.Reverse<Point>())
-                        points.Add(this.GetMoneySuitedCardPosition(r.X - 1, r.Y - 1));
+                var line = Instantiate<DrawLine>(this.DrawLine);
+                line.OnComplete.AddListener(this.OnDrawLineComplete);
+                var points = new List<Vector3>();
+                foreach (var r in route.Reverse<Point>())
+                    points.Add(this.GetMoneySuitedCardPosition(r.X - 1, r.Y - 1));
 
-                    line.Positions = points.ToArray();
-                }
-                else
-                { }
-                //line.numPositions = route.Count;
-                //foreach (var r in route.Reverse<Point>())
-                //    line.SetPosition(index++, this.GetMoneySuitedCardPosition(r.X - 1, r.Y - 1));
+                line.Positions = points.ToArray();
             }
         }
 	}
@@ -189,25 +230,44 @@ public class GameBoard : MonoBehaviour {
         }
     }
 
+    /// <summary>
+    /// 두 카드를 서로 제거한다.
+    /// </summary>
+    /// <param name="card1">첫 번째 카드</param>
+    /// <param name="card2">두 번째 카드</param>
+    /// <returns>성공시 두 카드 사이의 경로, 실패시 null</returns>
     private Stack<Point> Remove(MoneySuitedCard card1, MoneySuitedCard card2)
     {
-        if(card1.MatchingIndex != card2.MatchingIndex)
+        // 두 카드가 같은 형식이 아닌 경우
+        if (card1.MatchingIndex != card2.MatchingIndex)
             return null;
 
+        // 경로가 존재하지 않는 경우
         var route = this._blockTable.GetRoute(card1.Offset + 1, card2.Offset + 1);
         if(route == null)
             return null;
 
+        // 블록 테이블에서 해당 위치 업데이트를 해주고 (통과할 수 있도록)
         this._blockTable.SetDontMove(card1.Offset + 1, false);
         this._blockTable.SetDontMove(card2.Offset + 1, false);
 
+        // 두 카드 폭발 애니메이션 ㄱㄱ
         card1.Explode();
         card2.Explode();
 
+        // 현재 선택된 카드 없음
         this.Selected = null;
         return route;
     }
 
+    /// <summary>
+    /// 카드 정보를 입력한다.
+    /// </summary>
+    /// <param name="index">카드 고유 인덱스</param>
+    /// <param name="matchingIndex">카드 타입 인덱스</param>
+    /// <param name="row">행</param>
+    /// <param name="col">열</param>
+    /// <returns>초기화된 카드 객체</returns>
     private MoneySuitedCard SetMoneySuitedCard(int index, int matchingIndex, int row, int col)
     {
         try
@@ -225,6 +285,12 @@ public class GameBoard : MonoBehaviour {
         }
     }
 
+    /// <summary>
+    /// 카드의 위치를 얻는다.
+    /// </summary>
+    /// <param name="row">행</param>
+    /// <param name="col">열</param>
+    /// <returns></returns>
     public Vector2 GetMoneySuitedCardPosition(int row, int col)
     {
         return new Vector2(-this.Rows / 2 + row + this.MoneySuitedCardSize.x / 2.0f,
@@ -267,6 +333,7 @@ public class GameBoard : MonoBehaviour {
             {
                 var index = (col * this.Rows) + row;
                 var matchingIndex = index % (Mathf.Min(this.Sprites.Length, requireCardCount / 2));
+
                 this.SetMoneySuitedCard(index + 0, matchingIndex, row, col);
                 this.SetMoneySuitedCard(index + 1, matchingIndex, row + 1, col);
             }
@@ -296,6 +363,10 @@ public class GameBoard : MonoBehaviour {
         card1.Swap(card2);
     }
 
+
+    /// <summary>
+    /// 카드를 섞는다. (진행 가능할때까지 섞는다.)
+    /// </summary>
     public void Shuffle()
     {
         this.Selected = null;
@@ -313,17 +384,24 @@ public class GameBoard : MonoBehaviour {
             this.Shuffle();
     }
 
+    /// <summary>
+    /// 카드를 선택한다.
+    /// </summary>
+    /// <returns></returns>
     public MoneySuitedCard Select()
     {
+        // 마우스 위치에서 레이저를 쏴갈김
         var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         var hit = Physics2D.GetRayIntersection(ray, Mathf.Infinity);
         if(hit == false)
             return null;
 
+        // 레이저에 맞은 카드 선택
         var moneySuitedCard = hit.transform.GetComponent<MoneySuitedCard>();
         if(moneySuitedCard == null)
             return null;
 
+        // 선택된 카드 리턴
         return moneySuitedCard;
     }
 }
